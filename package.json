@@ -1,0 +1,17 @@
+{
+  "name": "mutula-fifa-api",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "API officielle des prédictions FIFA truquées pour Mutula David",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "keywords": ["fifa", "api", "mutula", "football", "predictions"],
+  "author": "The Billion AI",
+  "license": "ISC"
+}

@@ -1,0 +1,28 @@
+{
+  "status": "success",
+  "source": "melbet",
+  "timestamp": "2025-06-24T14:30:00Z",
+  "matches": [
+    {
+      "mode": "LIGUE_DES_CHAMPIONS",
+      "teams": "PSG vs Man City",
+      "prediction": "3-2",
+      "confidence": "98%"
+    },
+    {
+      "mode": "CINQ_X_CINQ",
+      "teams": "Team A vs Team B",
+      "prediction": {
+        "mi-temps": "1-1",
+        "final": "2-3"
+      },
+      "confidence": "97%"
+    },
+    {
+      "mode": "PENALTY",
+      "teams": "Al Nassr vs Barca",
+      "prediction": "Victoire Al Nassr",
+      "confidence": "99%"
+    }
+  ]
+}
