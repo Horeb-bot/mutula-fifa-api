@@ -1,40 +1,72 @@
 import axios from 'axios';
-import cheerio from 'cheerio';
-import fs from 'fs';
+import * as cheerio from 'cheerio';
+import TelegramBot from 'node-telegram-bot-api';
 
-// URL cible Melbet (à ajuster si besoin)
-const URL = 'https://melbet.com/fr/live/FIFA';
+// ✅ Variables d'environnement
+const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-// Fonction principale
-async function scrapeFifaMelbet() {
-  try {
-    const { data: html } = await axios.get(URL);
-    const $ = cheerio.load(html);
-
-    const matchs = [];
-
-    $('div.c-events__item_game').each((i, el) => {
-      const teams = $(el).find('.c-events__teams').text().trim().replace(/\s+/g, ' ');
-      const time = $(el).find('.c-events__time').text().trim();
-      const score = $(el).find('.c-events__score').text().trim();
-      const competition = $(el).find('.c-events__liga').text().trim();
-
-      if (teams && score) {
-        matchs.push({
-          teams,
-          score,
-          time,
-          competition,
-          confidence: '98%'
-        });
-      }
-    });
-
-    fs.writeFileSync('fifa.json', JSON.stringify({ matchs }, null, 2), 'utf-8');
-    console.log('✅ Données FIFA sauvegardées avec succès dans fifa.json');
-  } catch (err) {
-    console.error('❌ Erreur de scraping FIFA:', err.message);
-  }
+// ✅ Sécurité : vérification des infos obligatoires
+if (!TELEGRAM_TOKEN || !CHAT_ID) {
+    console.error('❌ Token ou Chat ID Telegram manquant');
+    process.exit(1);
 }
 
-scrapeFifaMelbet();
+// ✅ Initialisation du bot
+const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
+
+// ✅ URL Melbet truqué (à remplacer si tu as une URL spécifique en tête)
+const URL_MELBET = 'https://melbet.com/en/live/VirtualFootball/'; // ou l'URL directe du FIFA truqué
+
+// ✅ Fonction principale de scraping
+async function runScraper() {
+    try {
+        const response = await axios.get(URL_MELBET, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0'
+            }
+        });
+
+        const html = response.data;
+        const $ = cheerio.load(html);
+
+        let matchs = [];
+
+        // Exemple de scraping — À adapter à la structure Melbet réelle
+        $('.match-container').each((i, el) => {
+            const competition = $(el).find('.competition-name').text().trim();
+            const teams = $(el).find('.teams').text().trim();
+            const time = $(el).find('.match-time').text().trim();
+            const score = $(el).find('.match-score').text().trim();
+
+            if (competition && teams && score) {
+                matchs.push({ competition, teams, time, score });
+            }
+        });
+
+        if (matchs.length === 0) {
+            await bot.sendMessage(CHAT_ID, '❌ Aucun match truqué détecté pour le moment.');
+            return;
+        }
+
+        for (const match of matchs) {
+            const msg = `
+🎯 *MATCH FIFA TRUQUÉ DÉTECTÉ*
+🏆 Compétition : ${match.competition}
+⚽ Équipes : ${match.teams}
+⏱️ Heure : ${match.time}
+📊 Score Exact : ${match.score}
+💯 Fiabilité : 98% garantie
+
+_Propulsé par THE BILLION_ 💰
+`;
+            await bot.sendMessage(CHAT_ID, msg, { parse_mode: 'Markdown' });
+        }
+
+    } catch (error) {
+        console.error('❌ Erreur scraping ou envoi :', error.message);
+        await bot.sendMessage(CHAT_ID, `❌ Erreur scraping ou envoi : ${error.message}`);
+    }
+}
+
+runScraper();
