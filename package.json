@@ -1,4 +1,17 @@
 {
   "name": "mutula-fifa-api",
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "type": "module",
+  "description": "API MUTULA FIFA - Serveur Express en ligne",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "Mutula The Billion",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5"
+  }
 }
