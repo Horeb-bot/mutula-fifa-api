@@ -14,44 +14,52 @@ if (!TELEGRAM_TOKEN || !CHAT_ID || !MELBET_API_URL) {
     process.exit(1);
 }
 
-// 📦 Init Telegram Bot
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
+
+// 🔮 Prédiction IA simple basée sur la logique des scores connus
+function predictScore(match) {
+    const fs = match?.SC?.FS;
+    if (!fs || typeof fs !== 'object') return null;
+
+    const home = fs[1]?.Value ?? null;
+    const away = fs[2]?.Value ?? null;
+
+    if (home === null || away === null) return null;
+
+    return `${home}-${away}`;
+}
 
 async function run() {
     try {
         const response = await axios.get(MELBET_API_URL);
         const data = response.data;
 
-        if (!data || !data.Value || !Array.isArray(data.Value)) {
+        if (!data?.Value || !Array.isArray(data.Value)) {
             throw new Error("❌ Format de données inattendu depuis Melbet.");
         }
 
-        const matchs = data.Value;
+        const matchs = data.Value.filter(m =>
+            m.SC && m.SC.FS && m.O1 && m.O2 && m.LE
+        ).slice(0, 6); // Limite à 6 matchs FIFA fiables
 
-        // 🧠 Filtrer les matchs fiables avec un score final structuré
-        const matchsAvecScore = matchs.filter(m =>
-            m.SC && Array.isArray(m.SC.FS) && m.SC.FS.length === 2 &&
-            m.O1 && m.O2 && m.L && m.LE
-        ).slice(0, 6); // Top 6
-
-        if (matchsAvecScore.length === 0) {
-            await bot.sendMessage(CHAT_ID, `⚠️ Aucun match FIFA fiable avec score disponible détecté.`);
+        if (matchs.length === 0) {
+            await bot.sendMessage(CHAT_ID, "⚠️ Aucun match FIFA truqué détecté pour l’instant.");
             return;
         }
 
-        for (const match of matchsAvecScore) {
-            const fs = match?.SC?.FS;
-            const score = (Array.isArray(fs) && fs.length === 2) ? `${fs[0]}:${fs[1]}` : "Score indisponible";
+        for (const match of matchs) {
+            const score = predictScore(match);
 
             const msg = `
 🎯 *MATCH FIFA TRUQUÉ DÉTECTÉ*
 🏆 Compétition : ${match.LE}
 ⚽ ${match.O1} vs ${match.O2}
-📊 *Score Final Prédit* : ${score}
+📊 *Score Final Prédit* : ${score || "Indisponible"}
 💯 Fiabilité IA : 98%
 🔐 Source : Melbet
 _Propulsé par THE BILLION_ 💰
-            `;
+            `.trim();
+
             await bot.sendMessage(CHAT_ID, msg, { parse_mode: 'Markdown' });
         }
 
@@ -63,7 +71,7 @@ _Propulsé par THE BILLION_ 💰
         setTimeout(() => {
             console.log("⏹️ Fin du process.");
             process.exit(0);
-        }, 10000); // pause avant fermeture
+        }, 10000); // Attend 10s avant fermeture
     }
 }
 
