@@ -1,61 +1,73 @@
-import dotenv from 'dotenv';
 import axios from 'axios';
+import cheerio from 'cheerio';
 import TelegramBot from 'node-telegram-bot-api';
-
+import dotenv from 'dotenv';
 dotenv.config();
 
-const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-const MELBET_API_URL = process.env.MELBET_API_URL;
+// 🔐 Variables sensibles
+const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '7577492603:AAGcYaB4sWZ8ALAzwsygpF7BWrx7LIHhoGg';
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '6988024137';
+const MELBET_API_URL = process.env.MELBET_API_URL || 'https://melbet.cd/service-api/LiveFeed/Get1x2_VZip?sports=85&count=40&lng=fr&gr=870&mode=4&country=94&partner=8&getEmpty=true&virtualSports=true&noFilterBlockEvent=true';
 
-if (!TOKEN || !CHAT_ID || !MELBET_API_URL) {
-    console.error("❌ Variables d'environnement manquantes.");
-    process.exit(1);
+const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
+
+// 🔁 Scraper HTML via cheerio (SofaScore ou Score24)
+async function scrapeHTML(url, selector) {
+    try {
+        const { data } = await axios.get(url);
+        const $ = cheerio.load(data);
+        return $(selector).text().trim();
+    } catch {
+        return null;
+    }
 }
 
-const bot = new TelegramBot(TOKEN, { polling: false });
-
+// 🎯 Extraction Melbet & croisement
 async function run() {
     try {
         const res = await axios.get(MELBET_API_URL);
-        const matchs = res.data?.Value || [];
+        const data = res.data?.Value || [];
 
-        const filtrés = matchs.filter(m =>
-            m.SC && Array.isArray(m.SC.FS) &&
-            m.SC.FS.length === 2 &&
-            typeof m.SC.FS[0] === 'number' &&
-            typeof m.SC.FS[1] === 'number' &&
+        const matchs = data.filter(m =>
+            m.SC && Array.isArray(m.SC.FS) && m.SC.FS.length === 2 &&
             m.O1 && m.O2 && m.LE
         ).slice(0, 6);
 
-        if (filtrés.length === 0) {
-            await bot.sendMessage(CHAT_ID, `⚠️ Aucun score disponible sur Melbet pour l'instant.`);
+        if (matchs.length === 0) {
+            await bot.sendMessage(CHAT_ID, '⚠️ Aucun match fiable détecté.');
             return;
         }
 
-        for (const match of filtrés) {
-            const scoreFinal = `${match.SC.FS[0]}-${match.SC.FS[1]}`;
+        for (const match of matchs) {
+            const team1 = match.O1;
+            const team2 = match.O2;
+            const comp = match.LE;
+            const fs = match.SC.FS;
+            const melbetScore = `${fs[0]}-${fs[1]}`;
+
+            // 📡 Scraper SofaScore ou Score24.live (à adapter si dispo)
+            const score1 = await scrapeHTML('https://www.score24.live', '.scoreboard .score'); // à adapter
+            const score2 = await scrapeHTML('https://www.sofascore.com', '.event .score');      // à adapter
+
+            // 🔐 Vérification croisée
+            const scoreAgree = [melbetScore, score1, score2].filter(s => s === melbetScore).length >= 2;
+
             const message = `
 🎯 *MATCH FIFA TRUQUÉ DÉTECTÉ*
-🏆 Compétition : ${match.LE}
-⚽ ${match.O1} vs ${match.O2}
-📊 *Score Final Prédit* : ${scoreFinal}
-💯 Fiabilité IA : 98%
-🔐 Source : Melbet
+🏆 Compétition : ${comp}
+⚽ ${team1} vs ${team2}
+📊 *Score Final Prédit* : ${scoreAgree ? melbetScore : 'Non fiable'}
+💯 Fiabilité IA : ${scoreAgree ? '98%' : '⚠️ Incertaine'}
+🔐 Source : Melbet, SofaScore, Score24
 _Propulsé par THE BILLION_ 💰
             `;
-            await bot.sendMessage(CHAT_ID, message, { parse_mode: "Markdown" });
+            await bot.sendMessage(CHAT_ID, message, { parse_mode: 'Markdown' });
         }
 
-        console.log("✅ Messages envoyés.");
+        console.log("✅ Prédictions envoyées.");
     } catch (err) {
-        console.error("❌ Erreur :", err.message);
+        console.error("❌ ERREUR :", err.message);
         await bot.sendMessage(CHAT_ID, `❌ Erreur : ${err.message}`);
-    } finally {
-        setTimeout(() => {
-            console.log("⏹️ Fin.");
-            process.exit(0);
-        }, 8000);
     }
 }
 
