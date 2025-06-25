@@ -13,37 +13,38 @@ if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID || !MELBET_API_URL) {
 
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: false });
 
-function extraireScore(match) {
+// ✅ Fonction pour extraire le score final depuis Melbet
+function getScoreFinal(match) {
     try {
-        const sc = match?.SC?.FS;
-        if (sc && typeof sc === "object") {
-            const valeurs = Object.values(sc).filter(val => val && typeof val.Value === "number");
-            if (valeurs.length === 2) {
-                return `${valeurs[0].Value}-${valeurs[1].Value}`;
-            }
+        const fs = match?.SC?.FS;
+        const home = fs?.["1"]?.Value;
+        const away = fs?.["2"]?.Value;
+        if (typeof home === 'number' && typeof away === 'number') {
+            return `${home}-${away}`;
         }
     } catch (err) {
-        return null;
+        return "Indisponible";
     }
-    return null;
+    return "Indisponible";
 }
 
+// 🧠 Main logic
 async function run() {
     try {
         const response = await axios.get(MELBET_API_URL);
-        const data = response.data?.Value || [];
+        const matchs = response.data?.Value || [];
 
-        const matchs = data.filter(m =>
-            m.O1 && m.O2 && m.LE && m.L && m.SC && m.SC.FS
+        const filtres = matchs.filter(m =>
+            m.O1 && m.O2 && m.LE && m.L && m.SC?.FS
         ).slice(0, 6);
 
-        if (matchs.length === 0) {
-            await bot.sendMessage(TELEGRAM_CHAT_ID, "⚠️ Aucun match FIFA truqué fiable détecté.");
+        if (filtres.length === 0) {
+            await bot.sendMessage(TELEGRAM_CHAT_ID, "⚠️ Aucun match FIFA fiable détecté.");
             return;
         }
 
-        for (const match of matchs) {
-            const score = extraireScore(match) || "Non disponible";
+        for (const match of filtres) {
+            const score = getScoreFinal(match);
 
             const message = `
 🎯 *MATCH FIFA TRUQUÉ DÉTECTÉ*
@@ -52,15 +53,14 @@ async function run() {
 📊 *Score Final Prédit* : ${score}
 💯 Fiabilité IA : 98%
 🔐 Source : Melbet
-_Propulsé par THE BILLION_ 💰
-            `.trim();
+_Propulsé par THE BILLION_ 💰`.trim();
 
             await bot.sendMessage(TELEGRAM_CHAT_ID, message, { parse_mode: 'Markdown' });
         }
 
-        console.log("✅ Terminé avec succès.");
+        console.log("✅ Envoi terminé.");
     } catch (err) {
-        console.error("❌ Erreur :", err.message);
+        console.error("❌ Erreur : ", err.message);
         await bot.sendMessage(TELEGRAM_CHAT_ID, `❌ Erreur dans le script : ${err.message}`);
     } finally {
         process.exit(0);
