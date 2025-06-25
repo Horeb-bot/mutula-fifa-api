@@ -1,9 +1,10 @@
-import * as axios from 'axios';
 import * as cheerio from 'cheerio';
-import * as TelegramBot from 'node-telegram-bot-api';
-import * as dotenv from 'dotenv';
-dotenv.config();
+import axios from 'axios';
+import dotenv from 'dotenv';
+import pkg from 'node-telegram-bot-api';
+const TelegramBot = pkg.default;
 
+dotenv.config();
 // 🔐 Variables sensibles
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '7577492603:AAGcYaB4sWZ8ALAzwsygpF7BWrx7LIHhoGg';
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '6988024137';
