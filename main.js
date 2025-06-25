@@ -1,50 +1,39 @@
-import axios from 'axios';
-import TelegramBot from 'node-telegram-bot-api';
-import dotenv from 'dotenv';
+const axios = require('axios');
+const TelegramBot = require('node-telegram-bot-api');
 
-dotenv.config();
-
-// 🔐 Variables obligatoires
-const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const MELBET_API_URL = process.env.MELBET_API_URL;
 
-if (!TELEGRAM_TOKEN || !CHAT_ID || !MELBET_API_URL) {
+if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID || !MELBET_API_URL) {
     console.error("❌ Variables d’environnement manquantes.");
     process.exit(1);
 }
 
-// 🛠️ Init Telegram bot
-const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
+const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: false });
 
 async function run() {
     try {
-        const response = await axios.get(MELBET_API_URL);
-        const data = response.data;
+        const res = await axios.get(MELBET_API_URL);
+        const matchs = res.data?.Value ?? [];
 
-        if (!data?.Value || !Array.isArray(data.Value)) {
-            throw new Error("❌ Format de données inattendu depuis Melbet.");
-        }
-
-        const matchs = data.Value.filter(m =>
+        const filtrés = matchs.filter(m =>
             m.SC?.FS &&
             typeof m.SC.FS === 'object' &&
-            Object.keys(m.SC.FS).length === 2 &&
+            Object.values(m.SC.FS).every(s => typeof s?.Value === 'number') &&
             m.O1 && m.O2 && m.L && m.LE
         ).slice(0, 6);
 
-        if (matchs.length === 0) {
-            await bot.sendMessage(CHAT_ID, `⚠️ Aucun match truqué fiable avec score détecté.`);
+        if (filtrés.length === 0) {
+            await bot.sendMessage(TELEGRAM_CHAT_ID, "⚠️ Aucun match truqué fiable détecté.");
             return;
         }
 
-        for (const match of matchs) {
-            const keys = Object.keys(match.SC.FS);
-            const homeScore = match.SC.FS[keys[0]]?.Value ?? 'N/A';
-            const awayScore = match.SC.FS[keys[1]]?.Value ?? 'N/A';
-            const scoreFinal = `${homeScore}-${awayScore}`;
+        for (const match of filtrés) {
+            const [fs1, fs2] = Object.values(match.SC.FS);
+            const scoreFinal = `${fs1?.Value ?? 'N/A'} - ${fs2?.Value ?? 'N/A'}`;
 
-            const message = `
+            const msg = `
 🎯 *MATCH FIFA TRUQUÉ DÉTECTÉ*
 🏆 Compétition : ${match.LE}
 ⚽ ${match.O1} vs ${match.O2}
@@ -52,21 +41,18 @@ async function run() {
 💯 Fiabilité IA : 98%
 🔐 Source : Melbet
 _Propulsé par THE BILLION_ 💰
-            `;
+            `.trim();
 
-            await bot.sendMessage(CHAT_ID, message, { parse_mode: 'Markdown' });
+            await bot.sendMessage(TELEGRAM_CHAT_ID, msg, { parse_mode: "Markdown" });
         }
 
-        console.log("✅ Prédictions envoyées.");
+        console.log("✅ Prédictions envoyées avec succès.");
 
-    } catch (error) {
-        console.error("❌ Erreur critique :", error.message);
-        await bot.sendMessage(CHAT_ID, `❌ Erreur critique Render : ${error.message}`);
+    } catch (err) {
+        console.error("❌ Erreur :", err.message);
+        await bot.sendMessage(TELEGRAM_CHAT_ID, `❌ Erreur critique : ${err.message}`);
     } finally {
-        setTimeout(() => {
-            console.log("⏹️ Fin du process Render.");
-            process.exit(0);
-        }, 10000);
+        process.exit(0); // ✅ Pour éviter toute boucle
     }
 }
 
