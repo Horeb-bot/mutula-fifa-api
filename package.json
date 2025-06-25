@@ -15,8 +15,8 @@
     "node-telegram-bot-api": "^0.61.0"
   },
   "scripts": {
-    "start": "node scraper.js",
-    "scrape": "node scraper.js"
+    "start": "node main.js",
+    "scrape": "node main.js"
   },
   "author": "Mutula The Billion",
   "license": "ISC"
