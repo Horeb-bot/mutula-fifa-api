@@ -1,44 +1,50 @@
-// server/index.js
 import express from 'express';
+import axios from 'axios';
+import cheerio from 'cheerio';
 import cors from 'cors';
-import fs from 'fs';
-import bodyParser from 'body-parser';
-import path from 'path';
 
 const app = express();
 app.use(cors());
-app.use(bodyParser.json());
 
-const PORT = process.env.PORT || 3000;
-const DATA_PATH = path.join('./data/fifa.json');
-
-// ✅ Page d'accueil
 app.get('/', (req, res) => {
   res.send('✅ MUTULA FIFA API EN LIGNE');
 });
 
-// ✅ Route pour récupérer les données FIFA
-app.get('/fifa', (req, res) => {
+// 🎯 Route principale pour les scores truqués
+app.get('/fifa', async (req, res) => {
   try {
-    const data = fs.readFileSync(DATA_PATH, 'utf-8');
-    res.json(JSON.parse(data));
+    const url = 'https://melbet.com/fr/live/FIFA'; // à adapter si tu utilises une autre page
+    const { data: html } = await axios.get(url);
+    const $ = cheerio.load(html);
+
+    const matchs = [];
+
+    $('.c-events__item').each((_, el) => {
+      const competition = $(el).find('.c-events__liga').text().trim();
+      const teams = $(el).find('.c-events__teams').text().trim().replace(/\s{2,}/g, ' vs ');
+      const score = $(el).find('.c-events-scoreboard__table').text().trim();
+      const time = $(el).find('.c-events__time').text().trim();
+
+      if (competition && teams && score) {
+        matchs.push({
+          competition,
+          teams,
+          time,
+          score,
+          confidence: "98%" // fixe car truqué
+        });
+      }
+    });
+
+    res.json({ matchs });
   } catch (err) {
-    console.error('❌ Erreur lecture fichier:', err.message);
-    res.status(500).send('Erreur lecture fifa.json');
+    console.error('❌ Erreur scraping Melbet :', err.message);
+    res.status(500).json({ error: 'Erreur scraping Melbet', details: err.message });
   }
 });
 
-// ✅ Route pour recevoir les prédictions et les enregistrer
-app.post('/upload', (req, res) => {
-  try {
-    fs.writeFileSync(DATA_PATH, JSON.stringify(req.body, null, 2));
-    res.send('✅ Données mises à jour avec succès');
-  } catch (err) {
-    console.error('❌ Erreur écriture fichier:', err.message);
-    res.status(500).send('Erreur écriture');
-  }
-});
-
+// Port Render ou local
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Serveur démarré sur le port ${PORT}`);
+  console.log(`✅ Serveur lancé sur le port ${PORT}`);
 });
