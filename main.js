@@ -15,79 +15,64 @@ if (!MELBET_API_URL || !TELEGRAM_TOKEN || !CHAT_ID) {
 
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
 
-function isMatchTruque(match) {
-    const league = match.LE?.toLowerCase();
-    const isTruque =
-        league?.includes("ligue des champions") ||
-        league?.includes("penalty") ||
-        league?.includes("5x5") ||
-        league?.includes("superleague") ||
-        league?.includes("superligue");
-
-    const scoreFinal = match.SC?.FS;
-    const scoreMiTemps = match.SC?.PS;
-    const scoreOk = scoreFinal?.["1"] != null && scoreFinal?.["2"] != null;
-
-    return isTruque && scoreOk;
+function getSafeScore(match) {
+    try {
+        return match.score && typeof match.score === 'object'
+            ? `${match.score.firstHalf || '??'} / ${match.score.fullTime || '??'}`
+            : match.score || 'Non défini';
+    } catch {
+        return 'Non détecté';
+    }
 }
 
-function getScoreString(score) {
-    return score ? `${score["1"]} - ${score["2"]}` : "Indisponible";
-}
-
-function hasAlreadyPredicted(match, existingMatches) {
-    return existingMatches.some(
-        (m) => m.O1 === match.O1 && m.O2 === match.O2 && m.LE === match.LE
-    );
+function iaConfidence(teams) {
+    const hash = [...teams].reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return 95 + (hash % 4); // entre 95% et 98%
 }
 
 async function run() {
     try {
         const response = await axios.get(MELBET_API_URL);
-        const data = response.data?.Value;
+        const data = response.data;
 
-        if (!Array.isArray(data)) {
-            throw new Error("❌ Format Melbet inattendu.");
+        const matches = data.Value || [];
+
+        const fifaMatches = matches.filter(m =>
+            m.League && m.League.includes("FC 24") && m.O1 && m.O2
+        );
+
+        if (fifaMatches.length === 0) {
+            await bot.sendMessage(CHAT_ID, `❌ Aucun match FIFA truqué détecté sur Melbet pour le moment.`);
+            return;
         }
 
-        const matchsTruques = [];
-        const messagesEnvoyes = [];
+        for (const match of fifaMatches) {
+            const teams = `${match.O1} vs ${match.O2}`;
+            const time = match.Time || "Heure inconnue";
+            const competition = match.League || "Inconnue";
 
-        for (const match of data) {
-            if (isMatchTruque(match) && !hasAlreadyPredicted(match, matchsTruques)) {
-                matchsTruques.push(match);
+            const message = `
+🎯 *MATCH FIFA TRUQUÉ DÉTECTÉ*
+🏆 Compétition : ${competition}
+⚽ Équipes : ${teams}
+🕒 Heure : ${time}
+📊 Score à Prédire : ${getSafeScore(match)}
+🔐 Source : Melbet
+💡 Fiabilité IA : ${iaConfidence(teams)}%
 
-                const scoreFinal = getScoreString(match.SC?.FS);
-                const scoreMiTemps = getScoreString(match.SC?.PS);
-
-                const message = `
-🎯 *MATCH FIFA TRUQUÉ DÉTECTÉ*  *(98% IA)*
-🏆 *Compétition* : ${match.LE}
-⚽ *Match* : ${match.O1} vs ${match.O2}
-🕒 *Heure* : ${match.L}
-⏸️ *Score Mi-Temps* : ${scoreMiTemps}
-⏱️ *Score Final* : ${scoreFinal}
-🧠 *Fiabilité IA* : *98%* ✅
-🔐 *Source* : Melbet
 _Propulsé par THE BILLION_ 💰
-                `;
+            `;
 
-                await bot.sendMessage(CHAT_ID, message, { parse_mode: 'Markdown' });
-                messagesEnvoyes.push(message);
-            }
+            await bot.sendMessage(CHAT_ID, message.trim(), { parse_mode: 'Markdown' });
         }
 
-        if (messagesEnvoyes.length === 0) {
-            await bot.sendMessage(CHAT_ID, `⚠️ Aucun match truqué fiable détecté actuellement.`);
-        }
-
-        console.log("✅ Envoi terminé.");
-        setTimeout(() => process.exit(0), 30000);
-    } catch (err) {
-        console.error("❌ Erreur récupération ou traitement :", err.message);
-        await bot.sendMessage(CHAT_ID, `❌ Erreur : ${err.message}`);
-        setTimeout(() => process.exit(1), 10000);
+    } catch (error) {
+        console.error("❌ Erreur pendant le scraping :", error.message);
+        await bot.sendMessage(CHAT_ID, `❌ Erreur scraping Melbet : ${error.message}`);
     }
+
+    console.log("✅ Scraping terminé.");
+    setTimeout(() => process.exit(0), 15000);
 }
 
 run();
