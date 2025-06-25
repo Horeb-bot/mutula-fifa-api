@@ -1,72 +1,58 @@
 import axios from 'axios';
-import * as cheerio from 'cheerio';
 import TelegramBot from 'node-telegram-bot-api';
+import dotenv from 'dotenv';
 
-// ✅ Variables d'environnement
+dotenv.config();
+
+// 1️⃣ Configuration des variables d'environnement
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const API_URL = process.env.MUTULA_API_URL || 'https://mutula-fifa-api.onrender.com/fifa'; // à personnaliser si besoin
 
-// ✅ Sécurité : vérification des infos obligatoires
 if (!TELEGRAM_TOKEN || !CHAT_ID) {
-    console.error('❌ Token ou Chat ID Telegram manquant');
+    console.error("❌ Le token Telegram ou le chat ID est manquant.");
     process.exit(1);
 }
 
-// ✅ Initialisation du bot
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
 
-// ✅ URL Melbet truqué (à remplacer si tu as une URL spécifique en tête)
-const URL_MELBET = 'https://melbet.com/en/live/VirtualFootball/'; // ou l'URL directe du FIFA truqué
-
-// ✅ Fonction principale de scraping
-async function runScraper() {
+// 2️⃣ Fonction principale
+async function run() {
     try {
-        const response = await axios.get(URL_MELBET, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0'
-            }
-        });
+        const response = await axios.get(API_URL);
+        const matchs = response.data?.matchs;
 
-        const html = response.data;
-        const $ = cheerio.load(html);
-
-        let matchs = [];
-
-        // Exemple de scraping — À adapter à la structure Melbet réelle
-        $('.match-container').each((i, el) => {
-            const competition = $(el).find('.competition-name').text().trim();
-            const teams = $(el).find('.teams').text().trim();
-            const time = $(el).find('.match-time').text().trim();
-            const score = $(el).find('.match-score').text().trim();
-
-            if (competition && teams && score) {
-                matchs.push({ competition, teams, time, score });
-            }
-        });
-
-        if (matchs.length === 0) {
-            await bot.sendMessage(CHAT_ID, '❌ Aucun match truqué détecté pour le moment.');
-            return;
+        if (!matchs || !Array.isArray(matchs)) {
+            throw new Error("❌ Format inattendu ou matchs indisponibles.");
         }
 
-        for (const match of matchs) {
-            const msg = `
+        if (matchs.length === 0) {
+            await bot.sendMessage(CHAT_ID, `❌ Aucun match truqué détecté pour l'instant.`);
+        } else {
+            for (const match of matchs) {
+                const message = `
 🎯 *MATCH FIFA TRUQUÉ DÉTECTÉ*
 🏆 Compétition : ${match.competition}
 ⚽ Équipes : ${match.teams}
 ⏱️ Heure : ${match.time}
 📊 Score Exact : ${match.score}
-💯 Fiabilité : 98% garantie
-
+💯 Fiabilité : ${match.confidence || 'Non spécifiée'}
 _Propulsé par THE BILLION_ 💰
-`;
-            await bot.sendMessage(CHAT_ID, msg, { parse_mode: 'Markdown' });
+                `;
+                await bot.sendMessage(CHAT_ID, message, { parse_mode: 'Markdown' });
+            }
         }
-
     } catch (error) {
-        console.error('❌ Erreur scraping ou envoi :', error.message);
-        await bot.sendMessage(CHAT_ID, `❌ Erreur scraping ou envoi : ${error.message}`);
+        console.error("❌ Erreur lors de la récupération ou de l'envoi :", error.message);
+        await bot.sendMessage(CHAT_ID, `❌ Erreur : ${error.message}`);
     }
+
+    console.log("✅ Scraping terminé. On attend 30 sec avant fermeture...");
+
+    setTimeout(() => {
+        console.log("⏹️ Fin du process proprement.");
+        process.exit(0); // Clôture propre
+    }, 30000); // Attente 30 secondes pour éviter le redémarrage immédiat
 }
 
-runScraper();
+run();
