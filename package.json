@@ -1,7 +1,8 @@
 {
-  "name": "fifa-truque-telegram",
+  "name": "melbet-scraper",
   "version": "1.0.0",
-  "type": "module",
+  "type": "commonjs",
+  "main": "main.js",
   "description": "Prédiction FIFA truquée 100% réelle via Melbet avec envoi Telegram automatique",
   "engines": {
     "node": ">=18.0.0"
