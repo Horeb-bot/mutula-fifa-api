@@ -1,58 +1,73 @@
+import { Actor } from 'apify';
 import axios from 'axios';
+import cheerio from 'cheerio';
 import TelegramBot from 'node-telegram-bot-api';
-import dotenv from 'dotenv';
 
-dotenv.config();
+await Actor.init();
 
-// 1️⃣ Configuration des variables d'environnement
+// Récupération des secrets
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-const API_URL = process.env.MUTULA_API_URL || 'https://mutula-fifa-api.onrender.com/fifa'; // à personnaliser si besoin
 
 if (!TELEGRAM_TOKEN || !CHAT_ID) {
-    console.error("❌ Le token Telegram ou le chat ID est manquant.");
-    process.exit(1);
+    throw new Error("❌ Token ou Chat ID Telegram manquant.");
 }
 
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
 
-// 2️⃣ Fonction principale
-async function run() {
+// URL Melbet des matchs FIFA truqués (à adapter si nécessaire)
+const MELBET_URL = 'https://melbet.com/fr/live/EsportFIFA';
+
+// Fonction de scraping
+async function scrapeFifaTruque() {
     try {
-        const response = await axios.get(API_URL);
-        const matchs = response.data?.matchs;
+        const { data: html } = await axios.get(MELBET_URL, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0',
+            }
+        });
 
-        if (!matchs || !Array.isArray(matchs)) {
-            throw new Error("❌ Format inattendu ou matchs indisponibles.");
-        }
+        const $ = cheerio.load(html);
+        const matchs = [];
 
-        if (matchs.length === 0) {
-            await bot.sendMessage(CHAT_ID, `❌ Aucun match truqué détecté pour l'instant.`);
-        } else {
-            for (const match of matchs) {
-                const message = `
+        $('div[class*=live__event]').each((_, el) => {
+            const teams = $(el).find('.live__name').text().trim().replace(/\s{2,}/g, ' ');
+            const score = $(el).find('.live__score').text().trim();
+            const time = $(el).find('.live__time').text().trim();
+            const competition = $(el).find('.live__category').text().trim();
+
+            if (teams && score) {
+                matchs.push({ competition, teams, score, time });
+            }
+        });
+
+        return matchs;
+    } catch (err) {
+        throw new Error(`❌ Erreur scraping Melbet : ${err.message}`);
+    }
+}
+
+try {
+    const matchs = await scrapeFifaTruque();
+
+    if (!matchs || matchs.length === 0) {
+        await bot.sendMessage(CHAT_ID, `❌ Aucun match FIFA détecté sur Melbet.`);
+    } else {
+        for (const match of matchs) {
+            const msg = `
 🎯 *MATCH FIFA TRUQUÉ DÉTECTÉ*
 🏆 Compétition : ${match.competition}
 ⚽ Équipes : ${match.teams}
 ⏱️ Heure : ${match.time}
 📊 Score Exact : ${match.score}
-💯 Fiabilité : ${match.confidence || 'Non spécifiée'}
 _Propulsé par THE BILLION_ 💰
-                `;
-                await bot.sendMessage(CHAT_ID, message, { parse_mode: 'Markdown' });
-            }
+            `;
+            await bot.sendMessage(CHAT_ID, msg, { parse_mode: 'Markdown' });
         }
-    } catch (error) {
-        console.error("❌ Erreur lors de la récupération ou de l'envoi :", error.message);
-        await bot.sendMessage(CHAT_ID, `❌ Erreur : ${error.message}`);
     }
-
-    console.log("✅ Scraping terminé. On attend 30 sec avant fermeture...");
-
-    setTimeout(() => {
-        console.log("⏹️ Fin du process proprement.");
-        process.exit(0); // Clôture propre
-    }, 30000); // Attente 30 secondes pour éviter le redémarrage immédiat
+} catch (error) {
+    console.error("❌ Erreur : ", error.message);
+    await bot.sendMessage(CHAT_ID, `❌ Erreur Melbet : ${error.message}`);
 }
 
-run();
+await Actor.exit();
