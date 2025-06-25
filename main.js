@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// 🔐 Variables d’environnement obligatoires
+// 🔐 Variables d’environnement
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const MELBET_API_URL = process.env.MELBET_API_URL;
@@ -22,25 +22,26 @@ async function run() {
         const response = await axios.get(MELBET_API_URL);
         const data = response.data;
 
-        if (!data?.Value || !Array.isArray(data.Value)) {
+        if (!data || !data.Value || !Array.isArray(data.Value)) {
             throw new Error("❌ Format de données inattendu depuis Melbet.");
         }
 
         const matchs = data.Value;
 
-        // 🧠 Filtrer les matchs avec score final disponible (SC.FS)
+        // 🧠 Filtrer les matchs fiables avec un score final structuré
         const matchsAvecScore = matchs.filter(m =>
-            m?.SC?.FS &&
-            m.O1 && m.O2 && m.LE
-        ).slice(0, 6); // max 6
+            m.SC && Array.isArray(m.SC.FS) && m.SC.FS.length === 2 &&
+            m.O1 && m.O2 && m.L && m.LE
+        ).slice(0, 6); // Top 6
 
         if (matchsAvecScore.length === 0) {
-            await bot.sendMessage(CHAT_ID, "⚠️ Aucun match FIFA fiable détecté pour l’instant.");
+            await bot.sendMessage(CHAT_ID, `⚠️ Aucun match FIFA fiable avec score disponible détecté.`);
             return;
         }
 
         for (const match of matchsAvecScore) {
-            const score = `${match.SC.FS?.[0]}:${match.SC.FS?.[1]}`;
+            const fs = match?.SC?.FS;
+            const score = (Array.isArray(fs) && fs.length === 2) ? `${fs[0]}:${fs[1]}` : "Score indisponible";
 
             const msg = `
 🎯 *MATCH FIFA TRUQUÉ DÉTECTÉ*
@@ -51,7 +52,6 @@ async function run() {
 🔐 Source : Melbet
 _Propulsé par THE BILLION_ 💰
             `;
-
             await bot.sendMessage(CHAT_ID, msg, { parse_mode: 'Markdown' });
         }
 
@@ -63,7 +63,7 @@ _Propulsé par THE BILLION_ 💰
         setTimeout(() => {
             console.log("⏹️ Fin du process.");
             process.exit(0);
-        }, 10000); // attendre 10s
+        }, 10000); // pause avant fermeture
     }
 }
 
