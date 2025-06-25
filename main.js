@@ -1,69 +1,89 @@
-const axios = require('axios');
-const TelegramBot = require('node-telegram-bot-api');
+import axios from 'axios';
+import TelegramBot from 'node-telegram-bot-api';
+import dotenv from 'dotenv';
 
-// Variables d'environnement
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+dotenv.config();
+
+// Variables d’environnement obligatoires
+const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const MELBET_API_URL = process.env.MELBET_API_URL;
 
-if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID || !MELBET_API_URL) {
-    console.error("❌ Variables manquantes.");
+if (!TELEGRAM_TOKEN || !CHAT_ID || !MELBET_API_URL) {
+    console.error("❌ Variables d’environnement manquantes.");
     process.exit(1);
 }
 
-const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: false });
+const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
 
-// ✅ Fonction pour extraire le score final depuis Melbet
+// 🔁 Fonction intelligente pour lire tous les types de structure SC.FS
 function getScoreFinal(match) {
+    const fs = match?.SC?.FS;
+
+    // 🛠️ Debug : pour comprendre la structure réelle
+    console.log("🔍 SC.FS =", JSON.stringify(fs));
+
     try {
-        const fs = match?.SC?.FS;
-        const home = fs?.["1"]?.Value;
-        const away = fs?.["2"]?.Value;
-        if (typeof home === 'number' && typeof away === 'number') {
+        if (Array.isArray(fs)) {
+            const home = fs.find(f => f.Key === 1)?.Value ?? 'N/A';
+            const away = fs.find(f => f.Key === 2)?.Value ?? 'N/A';
+            return `${home}-${away}`;
+        } else if (typeof fs === 'object') {
+            const home = fs?.["1"]?.Value ?? 'N/A';
+            const away = fs?.["2"]?.Value ?? 'N/A';
             return `${home}-${away}`;
         }
     } catch (err) {
-        return "Indisponible";
+        console.error("Erreur de lecture SC.FS :", err.message);
+        return 'Indisponible';
     }
-    return "Indisponible";
+    return 'Indisponible';
 }
 
-// 🧠 Main logic
 async function run() {
     try {
         const response = await axios.get(MELBET_API_URL);
-        const matchs = response.data?.Value || [];
+        const data = response.data;
 
-        const filtres = matchs.filter(m =>
-            m.O1 && m.O2 && m.LE && m.L && m.SC?.FS
+        if (!data || !data.Value || !Array.isArray(data.Value)) {
+            throw new Error("❌ Format de données inattendu depuis Melbet.");
+        }
+
+        const matchs = data.Value;
+
+        const truqués = matchs.filter(m =>
+            m.SC && m.SC.FS && m.O1 && m.O2 && m.LE
         ).slice(0, 6);
 
-        if (filtres.length === 0) {
-            await bot.sendMessage(TELEGRAM_CHAT_ID, "⚠️ Aucun match FIFA fiable détecté.");
+        if (truqués.length === 0) {
+            await bot.sendMessage(CHAT_ID, `⚠️ Aucun match fiable détecté.`);
             return;
         }
 
-        for (const match of filtres) {
-            const score = getScoreFinal(match);
+        for (const match of truqués) {
+            const scoreFinal = getScoreFinal(match);
 
-            const message = `
+            const msg = `
 🎯 *MATCH FIFA TRUQUÉ DÉTECTÉ*
 🏆 Compétition : ${match.LE}
 ⚽ ${match.O1} vs ${match.O2}
-📊 *Score Final Prédit* : ${score}
+📊 *Score Final Prédit* : ${scoreFinal}
 💯 Fiabilité IA : 98%
 🔐 Source : Melbet
-_Propulsé par THE BILLION_ 💰`.trim();
-
-            await bot.sendMessage(TELEGRAM_CHAT_ID, message, { parse_mode: 'Markdown' });
+_Propulsé par THE BILLION_ 💰
+            `;
+            await bot.sendMessage(CHAT_ID, msg, { parse_mode: 'Markdown' });
         }
 
-        console.log("✅ Envoi terminé.");
-    } catch (err) {
-        console.error("❌ Erreur : ", err.message);
-        await bot.sendMessage(TELEGRAM_CHAT_ID, `❌ Erreur dans le script : ${err.message}`);
+        console.log("✅ Prédictions envoyées avec succès.");
+    } catch (error) {
+        console.error("❌ Erreur :", error.message);
+        await bot.sendMessage(CHAT_ID, `❌ Erreur Melbet : ${error.message}`);
     } finally {
-        process.exit(0);
+        setTimeout(() => {
+            console.log("⏹️ Fin du process.");
+            process.exit(0);
+        }, 10000);
     }
 }
 
