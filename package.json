@@ -1,9 +1,8 @@
 {
   "name": "fifa-truque-telegram",
   "version": "1.0.0",
-  "type": "commonjs",
-  "main": "main.js",
-  "description": "Scraper Melbet pour Score FIFA truqué avec envoi Telegram automatique",
+  "type": "module",
+  "description": "Prédiction FIFA truquée 100% réelle via Melbet avec envoi Telegram automatique",
   "engines": {
     "node": ">=18.0.0"
   },
@@ -16,8 +15,7 @@
     "node-telegram-bot-api": "^0.61.0"
   },
   "scripts": {
-    "start": "node main.js",
-    "scrape": "node main.js"
+    "start": "node main.js"
   },
   "author": "Mutula The Billion",
   "license": "ISC"
