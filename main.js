@@ -1,7 +1,7 @@
-import axios from 'axios';
-import cheerio from 'cheerio';
-import TelegramBot from 'node-telegram-bot-api';
-import dotenv from 'dotenv';
+import * as axios from 'axios';
+import * as cheerio from 'cheerio';
+import * as TelegramBot from 'node-telegram-bot-api';
+import * as dotenv from 'dotenv';
 dotenv.config();
 
 // 🔐 Variables sensibles
